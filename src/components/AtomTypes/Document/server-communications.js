@@ -85,14 +85,15 @@ export class ModServerCommunications {
 
   /** Sends data to server or keeps it in a list if currently offline. */
   send(data) {
-	data.token = this.editor.token;
-	data.slug = this.editor.slug;
-	data.user = this.editor.username;
-	if (this.connected) {
-		this.ws.send(JSON.stringify(data));
-	} else if (data.type !== 'diff') {
-		this.messagesToSend.push(data);
-	}
+
+    data.token = this.editor.token;
+    data.id = this.editor.id;
+    data.user = this.editor.username;
+    if (this.connected) {
+      this.ws.send(JSON.stringify(data))
+    } else if (data.type !== 'diff') {
+      this.messagesToSend.push(data)
+    }
   }
 
   receive(data) {
