@@ -8,3 +8,5 @@ module.exports.Notification = require('./models/notification-model');
 module.exports.Tag = require('./models/tag-model');
 module.exports.User = require('./models/user-model');
 module.exports.Version = require('./models/version-model');
+
+// module.exports.Sequelize = require('./models/sequelize');

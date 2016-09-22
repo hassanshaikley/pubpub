@@ -10,6 +10,21 @@ mongoose.Promise = require('bluebird');
 if (!process.env.TESTING) {
 	mongoose.connect(process.env.MONGO_URI);
 }
+const Sequelize = require('sequelize')
+
+const sequelize = new Sequelize('database_test_development', '', '', {
+  host: 'localhost',
+  dialect: 'postgres',
+
+  pool: {
+    max: 5,
+    min: 0,
+    idle: 10000
+  },
+});
+
+// Or you can simply use a connection uri
+// var sequelize = new Sequelize(process.env.POSTGRES_URI);
 
 // require('../server.babel'); // babel registration (runtime transpilation for node)
 
@@ -31,6 +46,8 @@ const MongoStore = require('connect-mongo')(session);
 const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const User = require('./models').User;
+
+require('./models/sqlize')
 
 passport.use(new LocalStrategy(
   function(username, password, done) {
@@ -97,6 +114,6 @@ if (config.apiPort) {
 
 } else {
 	if (!process.env.TESTING) {
-		console.error('==>     ERROR: No PORT environment variable has been specified');	
+		console.error('==>     ERROR: No PORT environment variable has been specified');
 	}
 }

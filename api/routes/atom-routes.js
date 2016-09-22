@@ -175,7 +175,7 @@ export function createReplyDocument(req, res) {
 			});
 			tasks.push(newHighlight.save());
 
-			
+
 			const highlightObject = req.body.highlightObject || {};
 			const newHighlightVersion = new Version({
 				_id: newHighlightVersionID,
@@ -231,7 +231,7 @@ export function createReplyDocument(req, res) {
 				isPublished: true,
 				publishedBy: userID,
 				publishedDate: now,
-				createDate: now, 
+				createDate: now,
 				createdBy: userID,
 				content: versionContent
 			});
@@ -284,20 +284,51 @@ export function createReplyDocument(req, res) {
 }
 app.post('/createReplyDocument', createReplyDocument);
 
+import {getAtomDataPG} from '../models/sqlize';
 
+export function getAtomDataPGR(req, res) {
+	console.log("hit intended route")
+	const {slug, meta, version} = req.query;
+	const userID = req.user ? req.user._id : undefined;
+
+	// select atom
+
+	Promise.all([getAtomDataPG()]).then(function(taskResult){
+		console.log("Done:\t" +taskResult[0])
+	})
+	return res.status(201).json({
+		// atomData: atomResult,
+		// authorsData: taskData[0].filter((item)=>{
+		// 	return !!item.source;
+		// }),
+		// currentVersionData: currentVersionData,
+		// contributorsData: taskData[2].filter((item)=>{
+		// 	return !!item.source;
+		// }),
+		// versionsData: taskData[3],
+		// submittedData: taskData[4],
+		// featuredData: taskData[5],
+		// discussionsData: discussionsData,
+		// followersData: taskData[7],
+		token:'123',
+		collab: false,
+	});
+
+}
 export function getAtomData(req, res) {
 	const {slug, meta, version} = req.query;
 	const userID = req.user ? req.user._id : undefined;
 	// Check permission type
 
+	console.log('user is: ' +userID)
 	let permissionType;
 	Atom.findOne({slug: slug.toLowerCase()}).lean().exec()
 	.then(function(atomResult) { // Get most recent version
 		if (!atomResult) {
-			throw new Error('Atom does not exist');
+			throw new Error('Atom does not exist ' + 1);
 		}
-		const permissionLink = Link.findOne({source: userID, destination: atomResult._id, type: {$in: ['author', 'editor', 'reader']}, inactive: {$ne: true} }).exec();
-		const findFollowingLink = Link.findOne({source: userID, destination: atomResult._id, type: 'followsAtom', inactive: {$ne: true}}).exec();
+		const permissionLink = userID ? Link.findOne({source: userID, destination: atomResult._id, type: {$in: ['author', 'editor', 'reader']}, inactive: {$ne: true} }).exec() : undefined;
+		const findFollowingLink = userID ? Link.findOne({source: userID, destination: atomResult._id, type: 'followsAtom', inactive: {$ne: true}}).exec() : undefined;
 		return [atomResult, permissionLink, findFollowingLink];
 	})
 	.spread(function(atomResult, permissionLink, followingLink) {
@@ -343,8 +374,7 @@ export function getAtomData(req, res) {
 			select: 'username name image bio',
 		}).exec();
 
-		const versionQuery = permissionType !== 'author' && permissionType !== 'editor' && permissionType !== 'reader' ? {isPublished: true, _id: {$in: atomResult.versions}} : {_id: {$in: atomResult.versions}};
-		const getVersions = Version.find(versionQuery, {content: 0}).sort({createDate: -1});
+		const getVersions = Version.find({_id: {$in: atomResult.versions}}, {content: 0}).sort({createDate: -1});
 
 		const getSubmitted = new Promise(function(resolve) {
 			if (permissionType === 'author') {
@@ -458,13 +488,14 @@ export function getAtomData(req, res) {
 	})
 	.spread(function(atomResult, taskData) { // Send response
 		// What's spread? See here: http://stackoverflow.com/questions/18849312/what-is-the-best-way-to-pass-resolved-promise-values-down-to-a-final-then-chai
+		console.log(":: " + JSON.stringify(atomResult) + "\ntask: " + JSON.stringify(taskData))
 		if (!atomResult.isPublished && permissionType !== 'author' && permissionType !== 'editor' && permissionType !== 'reader') {
-			throw new Error('Atom does not exist');
+			throw new Error('Atom does not exist ' + 2);
 		}
 
 		const currentVersionData = taskData[1];
 		if (currentVersionData && !currentVersionData.isPublished && permissionType !== 'author' && permissionType !== 'editor' && permissionType !== 'reader') {
-			throw new Error('Atom does not exist');
+			throw new Error('Atom does not exist' + 3);
 		}
 
 		if (!meta && !currentVersionData) {
@@ -500,7 +531,7 @@ export function getAtomData(req, res) {
 		});
 	})
 	.catch(function(error) {
-		if (error.message === 'Atom does not exist') {
+		if (error.message === 'Atom does not exist ' + 4) {
 			console.log(error.message);
 			return res.status(404).json('404 Not Found');
 		}
@@ -516,7 +547,7 @@ export function getAtomData(req, res) {
 
 
 }
-app.get('/getAtomData', getAtomData);
+app.get('/getAtomData', getAtomDataPGR);
 
 export function getAtomEdit(req, res) {
 
@@ -532,7 +563,7 @@ export function getAtomEdit(req, res) {
 
 	.then(function(atomResult) { // Get most recent version
 		if (!atomResult) {
-			throw new Error('Atom does not exist');
+			throw new Error('Atom does not exist'+5);
 		}
 		const permissionLink = Link.findOne({source: userID, destination: atomResult._id, type: {$in: ['author', 'editor', 'reader']}, inactive: {$ne: true} });
 		return [atomResult, permissionLink];
