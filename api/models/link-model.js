@@ -11,7 +11,7 @@ const linkSchema = new Schema({
 	createDate: { type: Date },
 
 	// metadata: { type: Schema.Types.Mixed },
-	// metadata.collections: Used for Journal featured collections 
+	// metadata.collections: Used for Journal featured collections
 	metadata: {
 		collections: [{ type: ObjectId, ref: 'Tag'}],
 		rootReply: { type: ObjectId, ref: 'Atom'},
@@ -20,11 +20,11 @@ const linkSchema = new Schema({
 		roles: [{ type: Schema.Types.Mixed }],
 	},
 
-	inactive: { type: Boolean }, 
+	inactive: { type: Boolean },
 	inactiveBy: { type: ObjectId, ref: 'User'},
 	inactiveDate: { type: Date },
 	inactiveNote: { type: String },
-	
+
 });
 
 linkSchema.statics.createLink = function(type, source, destination, createBy, createDate, metadata) {
@@ -50,7 +50,7 @@ linkSchema.statics.setLinkInactive = function(type, source, destination, inactiv
 		linkResult.inactiveNote = inactiveNote;
 		return linkResult.save();
 	});
-	
+
 };
 
 linkSchema.statics.setLinkInactiveById = function(id, inactiveBy, inactiveDate, inactiveNote) {
@@ -65,7 +65,7 @@ linkSchema.statics.setLinkInactiveById = function(id, inactiveBy, inactiveDate, 
 		linkResult.inactiveNote = inactiveNote;
 		return linkResult.save();
 	});
-	
+
 };
 
 module.exports = mongoose.model('Link', linkSchema);
@@ -73,24 +73,24 @@ module.exports = mongoose.model('Link', linkSchema);
 // -------
 // Types
 // -------
-// 
+//
 // USER -> USER
-// followsUser
+// followsUser -
 
 // USER -> PUB
-// author
-// followsAtom
-// editor
-// reader
-// contributor
+// author -
+// followsAtom -
+// editor -
+// reader -
+// contributor -
 
 // USER -> JOURNAL
-// admin
-// followsJournal
+// admin -
+// followsJournal -
 
 
 // PUB -> PUB
-// reply
+// reply -
 // clone
 // lens
 // cite
@@ -98,10 +98,10 @@ module.exports = mongoose.model('Link', linkSchema);
 // source
 
 // PUB -> JOURNAL
-// submitted
+// submitted -
 
 // JOURNAL -> PUB
-// featured
+// featured -
 
 // -------
 // Metadata
@@ -110,9 +110,9 @@ module.exports = mongoose.model('Link', linkSchema);
 // 		rootReply
 // 		yays
 // 		nays
-// 		
+//
 // featured
 // 		collections
-// 
+//
 // author, contributor, editor, reader
 // 		roles

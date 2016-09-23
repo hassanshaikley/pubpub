@@ -138,10 +138,6 @@ export const Version = sequelize.define('version', {
 });
 
 
-export const Role = sequelize.define('role', {
-  data: Sequelize.JSON,
-});
-
 export const Vote = sequelize.define('vote', {
   vote: Sequelize.INTEGER, // -1 for downvote, 1 for upvote, this allows easy summing
 });
@@ -149,9 +145,30 @@ export const Vote = sequelize.define('vote', {
 export const Follows = sequelize.define('follows', {
 });
 
+// Not sure this is right. May just require an atom ID.
 export const Reply = sequelize.define('reply', {
-
+  content: Sequelize.STRING
 });
+
+// Journals have several Users with several roles
+export const Role = sequelize.define('role', {
+  type: Sequelize.STRING, //ie Author, Editor, Reader, Contributor
+})
+
+export const JournalAdmins = sequelize.define('journaladmins', {
+
+})
+
+export const Submitted = sequelize.define('submitted', {
+  approved: { // this variable isn't necessary if just want to use approvalDate and rejectionDate
+    // 0 for submitted, -1 for disapproved, 1 for approved
+    type: Sequelize.INTEGER,
+    defaultValue: 0
+  },
+  approvalDate: Sequelize.DATE,
+  rejectionDate: Sequelize.STRING,
+})
+
 
 
 // Link.belongsTo(User, {
@@ -170,13 +187,17 @@ Link.belongsTo(User, {as: 'createdBy' });
 Link.belongsTo(User, {as: 'inactiveBy' });
 Link.hasMany(Tag, {as: 'collections' });
 Link.hasMany(Atom, {as: 'rootReply' });
+
 Vote.belongsTo(User)
 Vote.belongsTo(Atom)
+
 Follows.belongsTo(User)
 Follows.belongsTo(User, {as: 'destinationUser'})
 Follows.belongsTo(Journal, {as: 'destinationJournal'})
 Follows.belongsTo(Atom, {as: 'destinationAtom'})
 
+Role.hasOne(User)
+Atom.hasMany(Contirbutor)
 
 Notification.belongsTo(Atom, {as: 'pub' });
 Notification.belongsTo(User, {as: 'sender' });
@@ -188,20 +209,27 @@ Tag.belongsTo(User, {as: 'publishedBy' });
 Tag.belongsTo(Atom, {as: 'atom' });
 
 Reply.belongsTo(Atom, {as: 'reply'})
+User.hasMany(Reply, {as: 'replies'})
 
-export function getAtomDataPG(){
-  console.log("gettingAdtom data ok")
+Journal.hasMany(JournalAdmin)
+JournalAdmin.hasOne(User, {as: 'admin'})
+
+Submitted.belongsTo(Journal)
+User.hasMany(Submitted)
+
+export function getAtomDataPG() {
+  console.log("getting Atom data ok")
   Atom.find({
     where: {
       id: 1
     }
   }
 ).then(function(atomData){
-      console.log(atomData)
-      return atomData;
-    }).catch(function(error){
-      console.log(error)
-    })
+    console.log(atomData)
+    return atomData;
+  }).catch(function(error){
+    console.log(error)
+  })
 }
 
 
