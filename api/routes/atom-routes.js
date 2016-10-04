@@ -8,6 +8,14 @@ const Journal = require('../models').Journal;
 const User = require('../models').User;
 const Promise = require('bluebird');
 
+// const Sequelize = require('sequelize')
+// process.env.POSTGRES_URI = 'postgres://127.0.0.1:5432/database_test_development'
+// var sequelize = new Sequelize(process.env.POSTGRES_URI);
+
+
+const db = require('../models/sequelize-models');
+
+
 // const SHA1 = require('crypto-js/sha1');
 // const encHex = require('crypto-js/enc-hex');
 const request = require('superagent-promise')(require('superagent'), Promise);
@@ -524,7 +532,86 @@ export function getAtomData(req, res) {
 
 
 }
-app.get('/getAtomData', getAtomData);
+
+
+//SELECT * FROM atoms FULL OUTER JOIN contributors ON atoms.id= WHERE slug='enlightenment-to-entanglement';
+export function getAtomDataPG(req, res) {
+	const {slug, meta, version} = req.query;
+	const userID = req.user ? req.user._id : undefined;
+
+	console.log("Getting atom with slug " + slug)
+
+	const getAtomAndVersions = db.Atom.findOne({ where: {slug: slug}, include: [{ model: db.Version }]})
+	.then(function(result){
+		console.log("\nAtom and version: " + JSON.stringify(result))
+		return result;
+	});
+
+
+
+	const getAuthorData = db.Contributor.findAll({ include: [{model: db.User}, { model: db.Atom, where: { slug : slug }, required: true}]})
+	.then(function(result){
+		console.log("\n\nAuthor Results: " +JSON.stringify(result) );
+		return (result || [])
+	})
+
+	const getRoleData = db.Role.findAll({ attributes: ['type'], include: [{ model: db.Atom, required: true, where: { slug : slug }, attributes: ['id']}, {model: db.User, attributes: ['userName'] }] } )
+	.then(function(result){
+		console.log("\n\nRole Results: " +JSON.stringify(result) );
+		return (result || []);
+	})
+
+	const getFeaturedData = db.Feature.findAll({ include: [{model: db.Journal}, { model: db.Atom, where: { slug : slug }, required: true}]})
+	.then(function(result){
+		console.log("\n\nFeature Results: " +JSON.stringify(result) );
+
+		return (result || []);
+	})
+
+	const tasks = [getAtomAndVersions, getAuthorData, getRoleData, getFeaturedData]
+
+
+	Promise.all(tasks)
+	.then(function(taskData){
+		let atomData = taskData[0];
+		const versionsData = taskData[0].versions;
+		//this line doesnt actually work...
+		delete atomData.versions;
+
+
+		console.log("\n\n\nVersion data: " + JSON.stringify(versionsData[0]))
+		console.log("\n\n\nAtom data: " + JSON.stringify(atomData))
+
+
+		return res.status(201).json({
+			atomData: atomData,
+			currentVersionData: versionsData[0],
+			versionsData: versionsData,
+			authorsData: [],
+			// authorsData: taskData[1],
+			contributorsData: [],
+			// contributorsData: taskData[2],
+			submittedData: [], // taskData[],
+			featuredData: [],
+			// featuredData: taskData[3],
+			discussionsData: [],
+			// discussionsData: taskData[...],
+			followersData: [], //taskData[],
+			replyParentData: [], //taskData[] -- title and slug, if this atom is a reply
+			token: '123',//token,
+			collab: false, //!!token,
+		})
+	})
+	.catch(function(error){
+		console.log("ERROR OMG " + error)
+		return res.status(500).json(error);
+
+	})
+
+}
+
+app.get('/getAtomData', getAtomDataPG);
+
 
 export function getAtomEdit(req, res) {
 
