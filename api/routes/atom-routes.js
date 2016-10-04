@@ -577,18 +577,11 @@ export function getAtomDataPG(req, res) {
 		const versionsData = taskData[0].versions;
 		//this line doesnt actually work...
 		delete atomData.versions;
-
-
-		console.log("\n\n\nVersion data: " + JSON.stringify(versionsData[0]))
-		console.log("\n\n\nAtom data: " + JSON.stringify(atomData))
-
-
 		return res.status(201).json({
 			atomData: atomData,
 			currentVersionData: versionsData[0],
 			versionsData: versionsData,
-			authorsData: [],
-			// authorsData: taskData[1],
+			authorsData: taskData[1],
 			contributorsData: [],
 			// contributorsData: taskData[2],
 			submittedData: [], // taskData[],
