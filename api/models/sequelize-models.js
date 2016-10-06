@@ -151,10 +151,16 @@ const Vote = sequelize.define('vote', {
 
 });
 
-const Follows = sequelize.define('follows', {
+const FollowsUser = sequelize.define('followsuser', {
   mongoId: Sequelize.STRING,
-
 });
+const FollowsAtom = sequelize.define('followsatom', {
+  mongoId: Sequelize.STRING,
+});
+const FollowsJournal = sequelize.define('followsjournal', {
+  mongoId: Sequelize.STRING,
+});
+
 
 // Not sure this is right. May just require an atom ID.
 const Reply = sequelize.define('reply', {
@@ -210,10 +216,13 @@ Vote.belongsTo(Atom)
 // Contributor.belongsTo(User)
 // Contributor.belongsTo(Atom)
 
-Follows.belongsTo(User, {foreignKey: { allowNull: false }, as: 'source'})
-Follows.belongsTo(User, {as: 'destinationUser'})
-Follows.belongsTo(Journal, {as: 'destinationJournal'})
-Follows.belongsTo(Atom, {as: 'destinationAtom'})
+FollowsUser.belongsTo(User, {foreignKey: { allowNull: false }, as: 'source'})
+FollowsAtom.belongsTo(User, {foreignKey: { allowNull: false }, as: 'source'})
+FollowsJournal.belongsTo(User, {foreignKey: { allowNull: false }, as: 'source'})
+
+FollowsUser.belongsTo(User, {as: 'destination'})
+FollowsJournal.belongsTo(Journal, {as: 'destination'})
+FollowsAtom.belongsTo(Atom, {as: 'destination'})
 
 Atom.hasMany(Contributor) //belongsto
 Atom.hasMany(Role)
@@ -223,9 +232,10 @@ Role.belongsTo(Atom) //does it belong to an atom or a reply?
 
 
 Reply.belongsTo(Atom, {as: 'rootReply'})
-Reply.belongsTo(Atom, {foreignKey: 'parentId'})
-Reply.belongsTo(Atom, {foreignKey : 'sourceId'})
-User.hasMany(Reply, {as: 'creator'})
+Reply.belongsTo(Atom, {as: 'parent'})
+Reply.belongsTo(Atom, {as : 'source'})
+Reply.belongsTo(User)
+User.hasMany(Reply)
 
 JournalAdmin.belongsTo(User, {foreignKey: 'createdById'})
 JournalAdmin.belongsTo(User, {foreignKey: 'userId'})
@@ -234,6 +244,8 @@ JournalAdmin.belongsTo(Journal)
 Contributor.belongsTo(User, { foreignKey: 'createdById'})
 Contributor.belongsTo(User)
 Contributor.belongsTo(Atom)
+
+User.hasMany(Role)
 
 // Tag.belongsTo(Atom, {as: 'parent' });
 // Tag.belongsTo(User, {as: 'createdBy' });
@@ -267,7 +279,11 @@ const db = {
   JournalAdmin: JournalAdmin,
   Vote: Vote,
   Sync: Sync,
-  Feature: Feature
+  Feature: Feature,
+  FollowsAtom: FollowsAtom,
+  FollowsUser: FollowsUser,
+  FollowsJournal: FollowsJournal,
+
 };
 
 db.sequelize = sequelize;

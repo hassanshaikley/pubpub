@@ -543,7 +543,6 @@ export function getAtomDataPG(req, res) {
 
 	const getAtomAndVersions = db.Atom.findOne({ where: {slug: slug}, include: [{ model: db.Version }]})
 	.then(function(result){
-		console.log("\nAtom and version: " + JSON.stringify(result))
 		return result;
 	});
 
@@ -555,10 +554,45 @@ export function getAtomDataPG(req, res) {
 		return (result || [])
 	})
 
-	const getRoleData = db.Role.findAll({ attributes: ['type'], include: [{ model: db.Atom, required: true, where: { slug : slug }, attributes: ['id']}, {model: db.User, attributes: ['userName'] }] } )
+	const getRoleData = db.Role.findAll({ attributes: ['type'], include: [{ model: db.Atom, required: true, where: { slug : slug }, attributes: ['id']}, {model: db.User, attributes: ['id', 'image','bio','firstName', 'lastName','userName'] }] } )
 	.then(function(result){
 		console.log("\n\nRole Results: " +JSON.stringify(result) );
-		return (result || []);
+		if (!result) return [];
+
+		let transformedResult = [];
+
+		result.forEach(function(item) {
+			let userData;
+
+
+			for (let i = 0; i < transformedResult.length; i++){
+				if (transformedResult[i].source.username == item.user.userName){
+					userData = transformedResult[i]
+				}
+			}
+
+			if (!userData){
+				let newUserData = {};
+				newUserData.type = 'Author';  // Incorrect but screw it for now
+				newUserData._id = item.user.id;
+				newUserData.source = {};
+				newUserData.source._id = item.user.id;
+				newUserData.source.username = item.user.userName;
+				newUserData.source.name = item.user.fullName;
+				newUserData.source.image = item.user.image;
+				newUserData.source.bio = item.user.bio;
+
+				newUserData.metadata = {}
+				newUserData.metadata.roles =[];
+				transformedResult.push(newUserData);
+				userData = newUserData;
+			}
+
+			userData.metadata.roles.push({ label: item.type, value: item.type })
+		})
+
+		console.log("\n\n\n\n\nnew result :: : " + JSON.stringify(transformedResult))
+		return transformedResult;
 	})
 
 	const getFeaturedData = db.Feature.findAll({ include: [{model: db.Journal}, { model: db.Atom, where: { slug : slug }, required: true}]})
@@ -568,7 +602,78 @@ export function getAtomDataPG(req, res) {
 		return (result || []);
 	})
 
-	const tasks = [getAtomAndVersions, getAuthorData, getRoleData, getFeaturedData]
+	const getFollowerData = db.FollowsAtom.findAll( { include: [ {model: db.Atom, as: 'destination', where: { slug: slug }  }, { model: db.User, required: true, as: 'source', attributes: ['userName', 'firstName', 'lastName', 'image', 'bio', 'id'] } ] })
+	.then(function(result){
+		console.log("\n\Followrs Results: " +JSON.stringify(result) );
+		if (!result) return [];
+
+
+		let transformedResult = [];
+		result.forEach(function(item){
+			let newElement = {};
+			newElement.type = 'followsAtom';
+			newElement.source = {};
+			newElement.source.userName = item.source.username;
+			newElement.source.name = item.source.fullName;
+			newElement.source.image = item.source.image;
+			newElement.source.bio = item.source.bio;
+
+			transformedResult.push(newElement);
+		})
+		return transformedResult;
+	})
+
+	const getDiscussionData = db.Reply.findAll( { include: [ { model: db.Atom, as: 'rootReply', where: { slug: slug}}, { model: db.User }, { model: db.Atom, as: 'source', include: [ db.Version] }], order: '\"source.versions.id\" desc' })
+	.then(function(result){
+		if (!result) return [];
+		console.log("\n\nFeature Results: " +JSON.stringify(result) );
+		let transformedResult = [];
+
+
+		result.forEach(function(item){
+			console.log("Source is : " + JSON.stringify(item.source))
+
+			let newData = {};
+			newData.atomData = {};
+			newData.atomData._id = item.source.id;
+			newData.atomData.slug = item.source.slug;
+			newData.atomData.createDate = item.source.createdAt;
+			newData.atomData.title = "Reply";
+
+			let author = {
+				source: {
+					name: item.user.firstName + item.user.lastName,
+					firstName: item.user.firstName,
+					lastName:  item.user.lastName,
+					image: item.user.image,
+				},
+			}
+			newData.authorsData =[]
+			newData.authorsData.push(author);
+
+			newData.versionData = {};
+
+
+			//get the version data for the most recent version
+
+			console.log(JSON.stringify(item.source.versions))
+			newData.versionData = item.source.versions[0];
+			newData.versionData.isPublished = true;
+			newData.versionData.parent = item.parentId;
+
+			newData.linkData = {}
+			newData.linkData.destination = item.parentId;
+			newData.linkData.metadata = {}
+			newData.linkData.metadata.rootReply = {id: item.rootReplyId}
+			newData.linkData.metadata.yays = [];
+			newData.linkData.metadata.nays = [];
+			transformedResult.push(newData)
+		})
+		console.log("Trasnform:\n\n\n" + JSON.stringify(transformedResult))
+		return transformedResult;
+	})
+
+	const tasks = [getAtomAndVersions, getAuthorData, getRoleData, getFeaturedData, getFollowerData, getDiscussionData]
 
 
 	Promise.all(tasks)
@@ -582,14 +687,13 @@ export function getAtomDataPG(req, res) {
 			currentVersionData: versionsData[0],
 			versionsData: versionsData,
 			authorsData: taskData[1],
-			contributorsData: [],
-			// contributorsData: taskData[2],
+			contributorsData: taskData[2],
 			submittedData: [], // taskData[],
 			featuredData: [],
 			// featuredData: taskData[3],
-			discussionsData: [],
+			discussionsData: taskData[5],
 			// discussionsData: taskData[...],
-			followersData: [], //taskData[],
+			followersData: taskData[4], //taskData[],
 			replyParentData: [], //taskData[] -- title and slug, if this atom is a reply
 			token: '123',//token,
 			collab: false, //!!token,
@@ -603,7 +707,7 @@ export function getAtomDataPG(req, res) {
 
 }
 
-app.get('/getAtomData', getAtomDataPG);
+app.get('/getAtomData', getAtomData);
 
 
 export function getAtomEdit(req, res) {
