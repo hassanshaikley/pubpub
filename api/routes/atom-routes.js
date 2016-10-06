@@ -684,7 +684,7 @@ export function getAtomDataPG(req, res) {
 		delete atomData.versions;
 		return res.status(201).json({
 			atomData: atomData,
-			currentVersionData: versionsData[0],
+			currentVersionData: versionsData[versionsData.length-1],
 			versionsData: versionsData,
 			authorsData: taskData[1],
 			contributorsData: taskData[2],
@@ -707,7 +707,7 @@ export function getAtomDataPG(req, res) {
 
 }
 
-app.get('/getAtomData', getAtomData);
+app.get('/getAtomData', getAtomDataPG);
 
 
 export function getAtomEdit(req, res) {
