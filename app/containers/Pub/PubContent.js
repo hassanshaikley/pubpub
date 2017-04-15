@@ -1,9 +1,9 @@
-import { NonIdealState, ProgressBar, Spinner } from '@blueprintjs/core';
+import { NonIdealState, ProgressBar, Spinner, Dialog } from '@blueprintjs/core';
 import React, { PropTypes } from 'react';
 
 // import ReactMarkdown from 'react-markdown';
 import { Link } from 'react-router';
-import { PUBPUB_EDITOR_URL } from 'configURLs';
+import { PUBPUB_EDITOR_URL, PUBPUB_CONVERSION_URL } from 'configURLs';
 import Radium from 'radium';
 import RenderFile from 'components/RenderFile/RenderFile';
 import dateFormat from 'dateformat';
@@ -11,6 +11,8 @@ import { globalStyles } from 'utils/globalStyles';
 import { postVersion } from './actionsVersions';
 import { putDefaultFile } from './actionsFiles';
 import { s3Upload } from 'utils/uploadFile';
+import request from 'superagent';
+
 
 let styles;
 
@@ -38,6 +40,13 @@ export const PubContent = React.createClass({
 			uploadedFileObjects: [],
 			newVersionMessage: '',
 			newVersionError: '',
+			convertableFiles: [],
+			unconvertableFiles: [],
+			conversionLoading: [],
+			conversionReady: [],
+			conversionReadyUrls: [],
+			conversionError: [],
+			conversionErrorAlert: false
 		};
 	},
 
@@ -68,12 +77,120 @@ export const PubContent = React.createClass({
 		// create fileObjects
 		// When they're all done, bundle them into a version (replacing similar named files)
 		// Create version
+		console.log('handling file upload aah')
 
 		const files = [];
 		for (let index = 0; index < evt.target.files.length; index++) {
 			files.push(evt.target.files[index]);
 		}
+
+		const convertableFiles = [];
+		const unconvertableFiles = [];
+		files.map((file) => {
+			const extension = file.name.split(`.`).pop();
+			// Use the API to populate this field
+			if (['pdf', 'docx'].indexOf(extension) !== -1) {
+				convertableFiles.push(file);
+			} else {
+				unconvertableFiles.push(file);
+			}
+		});
+
+
+		if (convertableFiles.length === 0) {
+			this.uploadFiles(files);
+		} else {
+			this.setState({
+				convertableFiles: convertableFiles,
+				unconvertableFiles: unconvertableFiles
+			});
+		}
+	},
+
+
+	convertFiles: function() {
+		const convertableFiles = this.state.convertableFiles;
+
+		console.log(`dOING SOMETHING TO ALL FILES TO CONVERT OKAY AHHGGGHHHGGG`);
+
+		for (const file of convertableFiles) {
+			const extension = file.split('.').pop();
+			let inputType;
+			switch (extension) {
+			case 'md':
+				inputType = 'markdown';
+				break;
+			default:
+				inputType = extension;
+				break;
+
+			}
+			console.log(`making a requst with ${file.contents}`)
+			request
+			.post(PUBPUB_CONVERSION_URL)
+			.send({ inputType: inputType, outputType: 'pub', inputUrl: file.contents })
+			.set('Accept', 'application/json')
+			.end((err, res) => {
+				if (err || !res.ok) {
+					alert('Oh no! error', err);
+				} else {
+					const pollUrl = res.body.pollUrl
+					console.log('set timeout on url ' + pollUrl)
+					window.setTimeout(this.pollURL.bind(this, pollUrl, file.name), 2000);
+
+				}
+			});
+		}
+	},
+	pollURL: function(url, fileName) {
+
+		const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === 'www.funky.com' || window.location.hostname === 'www.funkynocors.com';
+		const isRemoteDev = window.location.hostname === 'dev.pubpub.org' || window.location.hostname === 'test.epsx.org' || window.location.hostname === 'testnocors.epsx.org';
+		const isProd = !(isLocalDev || isRemoteDev);
+
+		let pollUrl = (isProd) ? 'https://pubpub-converter-prod.herokuapp.com' : 'https://pubpub-converter-dev.herokuapp.com';
+		pollUrl += url;
+
+		request
+		.get(pollUrl)
+		.end((err, res) => {
+			console.log(err, res);
+			if (!err && res && res.statusCode === 200) {
+				if (res.body.url) {
+					window.open(res.body.url, '_blank');
+					var index = this.state.conversionLoading.indexOf(fileName);
+					this.setState({
+						conversionLoading: this.state.conversionLoading.filter((_, i) => i !== index)
+					});
+					this.setState({
+						conversionReady: this.state.conversionReady.concat([fileName]),
+						conversionReadyUrls: this.state.conversionReadyUrls.concat([res.body.url])
+					});
+				} else {
+					window.setTimeout(this.pollURL.bind(this, url, fileName), 2000);
+				}
+			} else if (err) {
+				this.setState({
+					conversionError: this.state.conversionError.concat([fileName]),
+					conversionErrorAlert: true
+				});
+			}
+		});
+	},
+
+
+	cancelAllConversions: function() {
+		const unconvertableFiles = this.state.unconvertableFiles;
+		const convertableFiles = this.state.convertableFiles;
+
+		const allFiles = unconvertableFiles.concat(convertableFiles);
+
+		this.uploadFiles(allFiles);
+	},
+
+	uploadFiles: function(files) {
 		const startingFileIndex = this.state.uploadRates.length;
+
 		const newUploadRates = files.map((file)=> {
 			return 0;
 		});
@@ -84,7 +201,6 @@ export const PubContent = React.createClass({
 		const uploadRates = [...this.state.uploadRates, ...newUploadRates];
 		const uploadFileNames = [...this.state.uploadFileNames, ...newUploadFileNames];
 		const uploadFiles = [...this.state.uploadFiles, ...files];
-
 		files.map((file, index)=> {
 			s3Upload(file, this.onFileProgress, this.onFileFinish, startingFileIndex + index);
 		});
@@ -188,6 +304,8 @@ export const PubContent = React.createClass({
 		const params = this.props.params || {};
 		const meta = params.meta;
 		const routeFilename = params.filename;
+		const convertableFiles = this.state.convertableFiles;
+		const convertDialogTarget = convertableFiles[0] || { name: ''}
 
 		const mainFile = files.reduce((previous, current)=> {
 			if (version.defaultFile === current.name) { return current; }
@@ -356,6 +474,22 @@ export const PubContent = React.createClass({
 						<RenderFile file={routeFile || mainFile} allFiles={files} pubSlug={this.props.pub.slug} query={this.props.query}/>
 					</div>
 				}
+				{console.log(JSON.stringify(convertableFiles))}
+
+				<Dialog isOpen={convertableFiles.length > 0} onClose={this.cancelAllConversions}>
+					<div className="pt-dialog-body">
+						Would you like to convert <b>{convertableFiles.length}</b> files?
+						<br />
+						<small>This makes the files editable in PubPub but will likely lose some of it's properties.</small>
+					</div>
+					<div className="pt-dialog-footer">
+						<div className="pt-dialog-footer-actions">
+							<button type="button" className="pt-button" onClick={this.cancelAllConversions.bind(this, convertDialogTarget)}>Cancel</button>
+							<button type="submit" className="pt-button pt-intent-primary" onClick={this.convertFiles.bind(this, convertDialogTarget)}>Convert</button>
+						</div>
+					</div>
+				</Dialog>
+
 			</div>
 		);
 	},
