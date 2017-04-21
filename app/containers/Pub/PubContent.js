@@ -42,12 +42,38 @@ export const PubContent = React.createClass({
 			newVersionError: '',
 			convertableFiles: [],
 			unconvertableFiles: [],
-			conversionLoading: [],
-			conversionReady: [],
-			conversionReadyUrls: [],
+			// conversionLoading: [],
+			conversionDone: [],
+			conversionDoneUrls: [],
 			conversionError: [],
-			conversionErrorAlert: false
+			conversionErrorAlert: false,
+			convertedFiles: [],
+			inputTypes: []
 		};
+	},
+
+	componentWillMount() {
+		console.log(`component will mount fuckerr`)
+		const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === 'www.funky.com' || window.location.hostname === 'www.funkynocors.com';
+		const isRemoteDev = window.location.hostname === 'dev.pubpub.org' || window.location.hostname === 'test.epsx.org' || window.location.hostname === 'testnocors.epsx.org';
+		const isProd = !(isLocalDev || isRemoteDev);
+
+		const inputTypesUrl = (isProd) ? 'https://pubpub-converter-prod.herokuapp.com/inputTypes' : 'https://pubpub-converter-dev.herokuapp.com/inputTypes';
+
+		request
+		.get(inputTypesUrl)
+		.send()
+		.set('Accept', 'application/json')
+		.end((err, res) => {
+			if (err || !res.ok) {
+				alert('Oh no! error', err);
+			} else {
+				this.setState({
+					inputTypes: res.body
+				});
+				console.log('done fetching input types');
+			}
+		});
 	},
 
 	componentWillReceiveProps(nextProps) {
@@ -77,7 +103,7 @@ export const PubContent = React.createClass({
 		// create fileObjects
 		// When they're all done, bundle them into a version (replacing similar named files)
 		// Create version
-		console.log('handling file upload aah')
+		console.log('handling file upload aah');
 
 		const files = [];
 		for (let index = 0; index < evt.target.files.length; index++) {
@@ -86,10 +112,11 @@ export const PubContent = React.createClass({
 
 		const convertableFiles = [];
 		const unconvertableFiles = [];
+		const inputTypes = this.state.inputTypes;
 		files.map((file) => {
-			const extension = file.name.split(`.`).pop();
+			const extension = file.name.split('.').pop();
 			// Use the API to populate this field
-			if (['pdf', 'docx'].indexOf(extension) !== -1) {
+			if (inputTypes.indexOf(extension) !== -1) {
 				convertableFiles.push(file);
 			} else {
 				unconvertableFiles.push(file);
@@ -111,7 +138,7 @@ export const PubContent = React.createClass({
 	convertFiles: function() {
 		const convertableFiles = this.state.convertableFiles;
 
-		console.log(`dOING SOMETHING TO ALL FILES TO CONVERT OKAY AHHGGGHHHGGG`);
+		console.log('dOING SOMETHING TO ALL FILES TO CONVERT OKAY AHHGGGHHHGGG');
 
 		for (const file of convertableFiles) {
 			const extension = file.split('.').pop();
@@ -123,19 +150,18 @@ export const PubContent = React.createClass({
 			default:
 				inputType = extension;
 				break;
-
 			}
-			console.log(`making a requst with ${file.contents}`)
+			console.log(`making a requst with ${file.contents}`);
 			request
 			.post(PUBPUB_CONVERSION_URL)
-			.send({ inputType: inputType, outputType: 'pub', inputUrl: file.contents })
+			.send({ inputType: inputType, outputType: 'pub', inputContent: file.contents })
 			.set('Accept', 'application/json')
 			.end((err, res) => {
 				if (err || !res.ok) {
 					alert('Oh no! error', err);
 				} else {
-					const pollUrl = res.body.pollUrl
-					console.log('set timeout on url ' + pollUrl)
+					const pollUrl = res.body.pollUrl;
+					console.log('set timeout on url ' + pollUrl);
 					window.setTimeout(this.pollURL.bind(this, pollUrl, file.name), 2000);
 
 				}
@@ -147,6 +173,7 @@ export const PubContent = React.createClass({
 		const isLocalDev = window.location.hostname === 'localhost' || window.location.hostname === 'www.funky.com' || window.location.hostname === 'www.funkynocors.com';
 		const isRemoteDev = window.location.hostname === 'dev.pubpub.org' || window.location.hostname === 'test.epsx.org' || window.location.hostname === 'testnocors.epsx.org';
 		const isProd = !(isLocalDev || isRemoteDev);
+		let index;
 
 		let pollUrl = (isProd) ? 'https://pubpub-converter-prod.herokuapp.com' : 'https://pubpub-converter-dev.herokuapp.com';
 		pollUrl += url;
@@ -157,27 +184,55 @@ export const PubContent = React.createClass({
 			console.log(err, res);
 			if (!err && res && res.statusCode === 200) {
 				if (res.body.url) {
-					window.open(res.body.url, '_blank');
-					var index = this.state.conversionLoading.indexOf(fileName);
+					index = this.state.convertableFiles.indexOf(fileName);
+
+
 					this.setState({
-						conversionLoading: this.state.conversionLoading.filter((_, i) => i !== index)
-					});
-					this.setState({
-						conversionReady: this.state.conversionReady.concat([fileName]),
-						conversionReadyUrls: this.state.conversionReadyUrls.concat([res.body.url])
+						conversionDone: this.state.conversionDone.concat([fileName]),
+						conversionDoneUrls: this.state.conversionDoneUrls.concat([res.body.url]),
+						convertableFiles: this.state.convertableFiles.filter((_, ii) => ii !== index)
 					});
 				} else {
 					window.setTimeout(this.pollURL.bind(this, url, fileName), 2000);
 				}
 			} else if (err) {
+				index = this.state.convertableFiles.indexOf(fileName);
 				this.setState({
 					conversionError: this.state.conversionError.concat([fileName]),
-					conversionErrorAlert: true
+					conversionErrorAlert: true,
+					convertableFiles: this.state.convertableFiles.filter((_, ii) => ii !== index)
+
 				});
 			}
+			this.afterConversion();
 		});
 	},
 
+	// Run this function after all conversions
+	afterConversion: function() {
+
+		// Now have all the files as URLS. Still need to upload those files..
+		if (this.state.convertableFiles.length === 0) {
+			const urls = this.state.conversionDoneUrls;
+			for (let ii = 0; ii < urls.length; ii++) {
+				const url = urls[ii];
+				const xhr = new XMLHttpRequest();
+				xhr.open('GET', 'blob:' + url, true);
+				xhr.responseType = 'blob';
+				xhr.onload = function(ee) {
+					if (this.status === 200) {
+						const myObject = this.response;
+						this.setState({
+							convertedFiles: myObject
+						});
+					}
+				};
+				xhr.send();
+			}
+
+
+		}
+	},
 
 	cancelAllConversions: function() {
 		const unconvertableFiles = this.state.unconvertableFiles;
@@ -305,7 +360,7 @@ export const PubContent = React.createClass({
 		const meta = params.meta;
 		const routeFilename = params.filename;
 		const convertableFiles = this.state.convertableFiles;
-		const convertDialogTarget = convertableFiles[0] || { name: ''}
+		const convertDialogTarget = convertableFiles[0] || { name: '' };
 
 		const mainFile = files.reduce((previous, current)=> {
 			if (version.defaultFile === current.name) { return current; }
@@ -340,9 +395,6 @@ export const PubContent = React.createClass({
 									<div>
 										<Link to={'/pub/markdown'} style={{ marginRight: '0.5em' }}>How to write with PubPub Markdown</Link>
 									</div>
-
-									{/*<span style={{ width: '1em', height: '1em', display: 'inline-block' }} />
-									<a className="pt-button" tabIndex="0" role="button" >Open Editor</a>*/}
 
 
 								</div>
@@ -471,7 +523,7 @@ export const PubContent = React.createClass({
 				{/* Render specific File */}
 				{!!files.length && (meta !== 'files' || (meta !== 'files' && routeFile)) &&
 					<div style={styles.pubStyle} className={'pub-body'}>
-						<RenderFile file={routeFile || mainFile} allFiles={files} pubSlug={this.props.pub.slug} query={this.props.query}/>
+						<RenderFile file={routeFile || mainFile} allFiles={files} pubSlug={this.props.pub.slug} query={this.props.query} />
 					</div>
 				}
 				{console.log(JSON.stringify(convertableFiles))}
